@@ -1,0 +1,50 @@
+name: Release Chrome Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update manifest version
+        run: |
+          jq --arg ver "${{ steps.version.outputs.VERSION }}" '.version = $ver' public/manifest.json > manifest.tmp
+          mv manifest.tmp public/manifest.json
+
+      - name: Build
+        run: npm run build
+
+      - name: Create extension zip
+        run: |
+          cd dist
+          zip -r ../qdrant-chrome-plugin-${{ steps.version.outputs.VERSION }}.zip . -x "*.DS_Store"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.version.outputs.VERSION }}
+          generate_release_notes: true
+          files: qdrant-chrome-plugin-${{ steps.version.outputs.VERSION }}.zip
