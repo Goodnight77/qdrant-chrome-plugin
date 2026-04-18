@@ -97,3 +97,58 @@ registerRule('shard-recovery-in-progress', (ctx) => {
   }
   return insights;
 });
+
+// Rule: All segments in a shard are plain (none indexed)
+registerRule('all-segments-plain', (ctx) => {
+  const insights: Insight[] = [];
+  const checked = new Set<string>();
+  for (const [peerId, nodeTel] of allNodeTelemetries(ctx)) {
+    for (const coll of (nodeTel?.collections?.collections || [])) {
+      for (const shard of (coll.shards || [])) {
+        const key = `${coll.id}-${shard.id}`;
+        if (checked.has(key)) continue;
+        checked.add(key);
+        const segments = shard.local?.segments || [];
+        if (segments.length === 0) continue;
+        const totalPoints = segments.reduce((sum, s) => sum + (s.info.num_points || 0), 0);
+        if (totalPoints === 0) continue;
+        const allPlain = segments.every(s => s.info.num_indexed_vectors === 0);
+        if (allPlain) {
+          insights.push({ level: 'warning' as const, category: 'optimizer', collection: coll.id, shard: shard.id, node: peerId, title: `Shard ${shard.id}: no indexed segments`, detail: `All ${segments.length} segment(s) with ${totalPoints.toLocaleString()} points are plain (not indexed). Search will use brute-force scan. This may indicate the indexing threshold has not been reached or the optimizer is stuck.` });
+        }
+      }
+    }
+  }
+  return insights;
+});
+
+// Rule: Too many small segments — optimizer may not be merging
+registerRule('too-many-small-segments', (ctx) => {
+  const insights: Insight[] = [];
+  const checked = new Set<string>();
+  const SMALL_SEGMENT_THRESHOLD_BYTES = 10 * 1024 * 1024; // 10 MB
+  const MIN_SEGMENT_COUNT = 5;
+  const SMALL_RATIO_THRESHOLD = 0.7; // 70% of segments are small
+
+  for (const [peerId, nodeTel] of allNodeTelemetries(ctx)) {
+    for (const coll of (nodeTel?.collections?.collections || [])) {
+      for (const shard of (coll.shards || [])) {
+        const key = `${coll.id}-${shard.id}`;
+        if (checked.has(key)) continue;
+        checked.add(key);
+        const segments = shard.local?.segments || [];
+        if (segments.length < MIN_SEGMENT_COUNT) continue;
+
+        const segSizes = segments.map(s => (s.info.vectors_size_bytes || 0) + (s.info.payloads_size_bytes || 0));
+        const smallCount = segSizes.filter(size => size < SMALL_SEGMENT_THRESHOLD_BYTES).length;
+        const smallRatio = smallCount / segments.length;
+
+        if (smallRatio >= SMALL_RATIO_THRESHOLD) {
+          const avgSizeMB = (segSizes.reduce((a, b) => a + b, 0) / segments.length / (1024 * 1024)).toFixed(1);
+          insights.push({ level: 'warning' as const, category: 'optimizer', collection: coll.id, shard: shard.id, node: peerId, title: `Shard ${shard.id}: ${smallCount}/${segments.length} segments are small`, detail: `${smallCount} of ${segments.length} segments are under 10 MB (avg ${avgSizeMB} MB). This may indicate segments are not being merged by the optimizer. Check optimizer config and whether new data is being inserted in many small batches.` });
+        }
+      }
+    }
+  }
+  return insights;
+});

@@ -271,6 +271,51 @@ export interface SegmentConfig {
   payload_storage_type: { type: string };
 }
 
+// --- Optimizations API ---
+
+export interface OptimizationSegment {
+  uuid: string;
+  points_count: number;
+}
+
+export interface OptimizationProgress {
+  name: string;
+  started_at: string;
+  finished_at?: string | null;
+  duration_sec: number;
+  done: number;
+  total: number;
+  children?: (OptimizationProgress | null)[];
+}
+
+export interface OptimizationTask {
+  uuid: string;
+  optimizer: string;
+  status: string;
+  segments: OptimizationSegment[];
+  progress: OptimizationProgress;
+}
+
+export interface QueuedOptimizationTask {
+  optimizer: string;
+  segments: OptimizationSegment[];
+}
+
+export interface OptimizationsSummary {
+  queued_optimizations: number;
+  queued_segments: number;
+  queued_points: number;
+  idle_segments: number;
+}
+
+export interface CollectionOptimizations {
+  summary: OptimizationsSummary;
+  running: OptimizationTask[];
+  queued: QueuedOptimizationTask[];
+  completed: OptimizationTask[];
+  idle_segments: OptimizationSegment[];
+}
+
 // --- Dashboard Data ---
 
 export interface CollectionDetail {
@@ -289,8 +334,10 @@ export interface DashboardData {
 
 // --- Insights / Rules ---
 
+export type InsightLevel = 'critical' | 'warning' | 'performance' | 'info';
+
 export interface Insight {
-  level: 'critical' | 'warning' | 'performance' | 'info';
+  level: InsightLevel;
   category: string;
   title: string;
   detail: string;
@@ -300,6 +347,20 @@ export interface Insight {
 }
 
 export type RuleFunction = (ctx: DashboardData) => Insight[];
+
+export interface InsightsFilter {
+  levels: InsightLevel[];
+  collection: string | null;
+  category: string | null;
+  group: 'flat' | 'collection' | 'severity';
+}
+
+export const DEFAULT_INSIGHTS_FILTER: InsightsFilter = {
+  levels: ['critical', 'warning', 'performance', 'info'],
+  collection: null,
+  category: null,
+  group: 'severity',
+};
 
 // --- Peer Mapping Helper ---
 

@@ -2,6 +2,7 @@ import type {
   ClusterInfo,
   CollectionInfo,
   CollectionClusterInfo,
+  CollectionOptimizations,
   Telemetry,
   DashboardData,
   QdrantResponse,
@@ -22,6 +23,26 @@ export class QdrantApi {
 
     const response = await fetch(`${this.baseUrl}${path}`, { headers });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    return response.json() as Promise<T>;
+  }
+
+  private async _request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.apiKey) headers['api-key'] = this.apiKey;
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!response.ok) {
+      let msg = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errBody = await response.json();
+        if (errBody?.status?.error) msg += ` - ${errBody.status.error}`;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
     return response.json() as Promise<T>;
   }
 
@@ -59,6 +80,24 @@ export class QdrantApi {
   async getTelemetry(): Promise<Telemetry> {
     const data = await this._fetch<QdrantResponse<Telemetry>>('/telemetry?details_level=10');
     return data.result;
+  }
+
+  async getCollectionOptimizations(name: string): Promise<CollectionOptimizations> {
+    const data = await this._fetch<QdrantResponse<CollectionOptimizations>>(
+      `/collections/${encodeURIComponent(name)}/optimizations?with=queued,completed`,
+    );
+    return data.result;
+  }
+
+  // Triggers re-optimization by re-applying the optimizer config.
+  // Qdrant processes any update to optimizers_config as a signal to re-run
+  // the optimizer, merging small segments and building missing indexes.
+  async optimizeCollection(name: string): Promise<void> {
+    await this._request<QdrantResponse<boolean>>(
+      'PATCH',
+      `/collections/${encodeURIComponent(name)}`,
+      { optimizers_config: {} },
+    );
   }
 
   // Collect telemetry from all nodes behind a load balancer

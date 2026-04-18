@@ -1,7 +1,11 @@
-import type { DashboardData, Insight, CollectionInfo, VectorConfig } from '../../lib/types';
-import { formatNumber, formatBytes } from '../../lib/format';
+import { useState } from 'react';
+import type { DashboardData, Insight, CollectionInfo, VectorConfig, ClusterConfig, InsightsFilter } from '../../lib/types';
+import { DEFAULT_INSIGHTS_FILTER } from '../../lib/types';
+import { formatNumber } from '../../lib/format';
 import { insightsForCollection } from '../../rules';
 import { DEFAULTS, isNonDefault } from '../../lib/qdrant-defaults';
+import { QdrantApi } from '../../lib/qdrant-api';
+import { ConfirmDialog } from '../ConfirmDialog';
 
 // Renders a value with a marker if it differs from default
 function CfgVal({ value, defaultValue, display }: { value: unknown; defaultValue: unknown; display: string | React.ReactNode }) {
@@ -31,21 +35,48 @@ function OptimizerStatus({ status }: { status: string | { error: string } }) {
   return <>{String(status)}</>;
 }
 
-function InsightBadges({ insights }: { insights: Insight[] }) {
+function InsightBadges({ insights, collectionName, onNavigate }: { insights: Insight[]; collectionName: string; onNavigate: (filter?: Partial<InsightsFilter>) => void }) {
   const c = insights.filter(i => i.level === 'critical').length;
   const w = insights.filter(i => i.level === 'warning').length;
   const p = insights.filter(i => i.level === 'performance').length;
   if (!c && !w && !p) return null;
+  const open = (level: 'critical' | 'warning' | 'performance') => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onNavigate({ ...DEFAULT_INSIGHTS_FILTER, collection: collectionName, levels: [level] });
+  };
   return (
     <span style={{ display: 'flex', gap: 4 }}>
-      {c > 0 && <span className="insight-count-badge critical">{c} critical</span>}
-      {w > 0 && <span className="insight-count-badge warning">{w} warning</span>}
-      {p > 0 && <span className="insight-count-badge performance">{p} tip{p > 1 ? 's' : ''}</span>}
+      {c > 0 && <button className="insight-count-badge critical" onClick={open('critical')} title="Open Insights tab">{c} critical</button>}
+      {w > 0 && <button className="insight-count-badge warning" onClick={open('warning')} title="Open Insights tab">{w} warning</button>}
+      {p > 0 && <button className="insight-count-badge performance" onClick={open('performance')} title="Open Insights tab">{p} tip{p > 1 ? 's' : ''}</button>}
     </span>
   );
 }
 
-function CollectionCard({ name, info, insights }: { name: string; info: CollectionInfo; insights: Insight[] }) {
+function CollectionCard({ name, info, insights, cluster, onOptimized, onNavigateInsights }: { name: string; info: CollectionInfo; insights: Insight[]; cluster: ClusterConfig | null; onOptimized: () => void; onNavigateInsights: (filter?: Partial<InsightsFilter>) => void }) {
+  const [showOptimize, setShowOptimize] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  const [optimizeError, setOptimizeError] = useState<string | null>(null);
+  const [optimizeSuccess, setOptimizeSuccess] = useState(false);
+
+  const handleOptimize = async () => {
+    if (!cluster) return;
+    setOptimizing(true);
+    setOptimizeError(null);
+    try {
+      const api = new QdrantApi(cluster.url, cluster.apiKey);
+      await api.optimizeCollection(name);
+      setOptimizeSuccess(true);
+      setShowOptimize(false);
+      onOptimized();
+      setTimeout(() => setOptimizeSuccess(false), 4000);
+    } catch (e) {
+      setOptimizeError((e as Error).message);
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
   const config = info.config?.params || {} as CollectionInfo['config']['params'];
   const vectors = config.vectors || {};
   const sparseVectors = config.sparse_vectors || {};
@@ -84,9 +115,44 @@ function CollectionCard({ name, info, insights }: { name: string; info: Collecti
           <span className="meta-tag"><span className="label">Replication:</span><span className="val"><CfgVal value={config.replication_factor} defaultValue={DEFAULTS.params.replication_factor} display={config.replication_factor || '?'} /></span></span>
           <span className="meta-tag"><span className="label">Dense:</span><span className="val">{vectorSummary}</span></span>
           {sparseNames.length > 0 && <span className="meta-tag"><span className="label">Sparse:</span><span className="val">{sparseNames.length}</span></span>}
-          <InsightBadges insights={insights} />
+          <InsightBadges insights={insights} collectionName={name} onNavigate={onNavigateInsights} />
+          <button
+            className="btn btn-optimize"
+            onClick={() => { setOptimizeError(null); setShowOptimize(true); }}
+            disabled={!cluster || optimizing}
+            title="Trigger optimizer to merge segments and build indexes"
+          >
+            {optimizing ? 'Optimizing...' : optimizeSuccess ? 'Triggered ✓' : 'Optimize'}
+          </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showOptimize}
+        title={`Optimize "${name}"?`}
+        destructive
+        busy={optimizing}
+        confirmLabel="Yes, optimize"
+        cancelLabel="Cancel"
+        onConfirm={handleOptimize}
+        onCancel={() => setShowOptimize(false)}
+        message={
+          <>
+            <p>This will trigger the Qdrant optimizer to re-process all shards of this collection, merging small segments and building missing indexes.</p>
+            <div className="dialog-warning">
+              <strong>⚠️ Heavy operation</strong>
+              <ul>
+                <li>Increased <strong>CPU</strong> usage while optimization runs</li>
+                <li>Higher <strong>memory</strong> usage (new segments are built in parallel with old ones)</li>
+                <li>Additional <strong>disk space</strong> required until old segments are freed</li>
+                <li>Search latency may spike during the operation</li>
+              </ul>
+              <p>Particularly useful after a bulk indexing run — but avoid running it during peak traffic.</p>
+            </div>
+            {optimizeError && <p className="dialog-error">Error: {optimizeError}</p>}
+          </>
+        }
+      />
 
       <div className="config-grid">
         <div className="config-section">
@@ -176,7 +242,7 @@ function CollectionCard({ name, info, insights }: { name: string; info: Collecti
   );
 }
 
-export function CollectionsTab({ data, insights }: { data: DashboardData; insights: Insight[] }) {
+export function CollectionsTab({ data, insights, cluster, onRefresh, onNavigateInsights }: { data: DashboardData; insights: Insight[]; cluster: ClusterConfig | null; onRefresh: () => void; onNavigateInsights: (filter?: Partial<InsightsFilter>) => void }) {
   if (data.collections.length === 0) {
     return <div className="card"><p style={{ color: 'var(--text-secondary)' }}>No collections found</p></div>;
   }
@@ -189,7 +255,7 @@ export function CollectionsTab({ data, insights }: { data: DashboardData; insigh
           return <div key={name} className="collection-card"><span className="collection-name">{name}</span><span className="status-badge red">Error</span><p style={{ color: 'var(--error)' }}>{detail.error}</p></div>;
         }
         if (!detail?.info) return null;
-        return <CollectionCard key={name} name={name} info={detail.info} insights={insightsForCollection(insights, name)} />;
+        return <CollectionCard key={name} name={name} info={detail.info} insights={insightsForCollection(insights, name)} cluster={cluster} onOptimized={onRefresh} onNavigateInsights={onNavigateInsights} />;
       })}
     </>
   );
