@@ -1,23 +1,25 @@
 import { useEffect, useState } from 'react';
-import type { Insight } from '../lib/types';
+import type { Insight, DashboardData } from '../lib/types';
 import { AI_PROVIDERS, buildInsightPrompt } from '../lib/ai-prompt';
 import type { AIProvider } from '../lib/ai-prompt';
+import { AIProviderIcon } from '../components/AIProviderIcon';
 
 interface Props {
   insight: Insight | null;
+  data?: DashboardData;
   onClose: () => void;
 }
 
-export function AskAIDialog({ insight, onClose }: Props) {
+export function AskAIDialog({ insight, data, onClose }: Props) {
   const [prompt, setPrompt] = useState('');
   const [copiedFor, setCopiedFor] = useState<string | null>(null);
 
   useEffect(() => {
     if (insight) {
-      setPrompt(buildInsightPrompt(insight));
+      setPrompt(buildInsightPrompt(insight, data));
       setCopiedFor(null);
     }
-  }, [insight]);
+  }, [insight, data]);
 
   useEffect(() => {
     if (!insight) return;
@@ -39,7 +41,7 @@ export function AskAIDialog({ insight, onClose }: Props) {
         setTimeout(() => {
           window.open(provider.buildUrl(prompt), '_blank', 'noopener,noreferrer');
           onClose();
-        }, 800);
+        }, 900);
       } catch {
         window.open(provider.buildUrl(prompt), '_blank', 'noopener,noreferrer');
         onClose();
@@ -77,7 +79,7 @@ export function AskAIDialog({ insight, onClose }: Props) {
           />
 
           <div className="ask-ai-privacy">
-            <strong>\u2139 Privacy notice:</strong> This prompt will be sent to the AI service you choose. It contains your cluster's issue title, scope (collection/shard/node names), and the detail message — no API keys or raw data.
+            <strong>ℹ️ Privacy notice:</strong> This prompt will be sent to the AI service you choose. It includes the issue title, the detail message, and anonymized cluster context (counts, configuration, version) — collection names, node IDs, point UUIDs, and API keys are <strong>not</strong> shared. Review and edit the prompt below before sending.
           </div>
 
           <div className="ask-ai-providers">
@@ -88,14 +90,12 @@ export function AskAIDialog({ insight, onClose }: Props) {
                 style={{ borderColor: p.color, color: p.color }}
                 onClick={() => handleSend(p)}
                 title={p.supportsUrlPrefill ? `Open ${p.name} with this prompt` : `Copy prompt and open ${p.name}`}
+                disabled={copiedFor !== null}
               >
-                <span className="ask-ai-provider-dot" style={{ background: p.color }} />
-                <span>
-                  {copiedFor === p.key ? `Copied — opening ${p.name}…` : `Ask ${p.name}`}
+                <span className="ask-ai-provider-icon"><AIProviderIcon provider={p.key} /></span>
+                <span className="ask-ai-provider-label">
+                  {copiedFor === p.key ? 'Copied!' : `Ask ${p.name}`}
                 </span>
-                {!p.supportsUrlPrefill && copiedFor !== p.key && (
-                  <span className="ask-ai-provider-hint">(copy + open)</span>
-                )}
               </button>
             ))}
           </div>

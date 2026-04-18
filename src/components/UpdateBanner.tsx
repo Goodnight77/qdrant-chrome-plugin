@@ -35,7 +35,7 @@ export function UpdateBanner({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`update-banner ${compact ? 'compact' : ''}`}>
       <div className="update-banner-content">
-        <span className="update-banner-icon">\u2728</span>
+        <span className="update-banner-icon">✨</span>
         <div className="update-banner-text">
           <strong>New version available</strong>
           {!compact && (

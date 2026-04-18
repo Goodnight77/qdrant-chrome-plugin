@@ -1617,17 +1617,31 @@ header h1 {
   background: #fff !important;
 }
 
-.ask-ai-provider-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+.ask-ai-provider-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  line-height: 0;
 }
 
-.ask-ai-provider-hint {
-  font-size: 0.7rem;
-  font-weight: 400;
-  opacity: 0.7;
+.ask-ai-provider-icon svg {
+  display: block;
+}
+
+.ask-ai-provider-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.ask-ai-provider-btn:disabled:hover {
+  background: transparent;
+  transform: none;
+}
+
+.ask-ai-provider-btn:disabled:hover .ask-ai-provider-label,
+.ask-ai-provider-btn:disabled:hover .ask-ai-provider-icon {
+  color: inherit !important;
 }
 
 .insight-item {

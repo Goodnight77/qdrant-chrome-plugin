@@ -138,7 +138,7 @@ export function Dashboard() {
           {activeTab === 'transfers' && <TransfersTab data={data} />}
           {activeTab === 'cluster' && <ClusterTab data={data} />}
           {activeTab === 'requests' && <RequestsTab data={data} />}
-          {activeTab === 'insights' && <InsightsTab insights={insights} filter={insightsFilter} onFilterChange={setInsightsFilter} collections={data.collections} />}
+          {activeTab === 'insights' && <InsightsTab insights={insights} filter={insightsFilter} onFilterChange={setInsightsFilter} collections={data.collections} data={data} />}
         </>
       )}
     </div>

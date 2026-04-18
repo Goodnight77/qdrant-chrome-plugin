@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Insight, InsightLevel, InsightsFilter } from '../../lib/types';
+import type { Insight, InsightLevel, InsightsFilter, DashboardData } from '../../lib/types';
 import { DEFAULT_INSIGHTS_FILTER } from '../../lib/types';
 import { AskAIDialog } from '../AskAIDialog';
 
@@ -37,7 +37,7 @@ function InsightItem({ insight, onAsk }: { insight: Insight; onAsk: (ins: Insigh
         onClick={() => onAsk(insight)}
         title="Ask an AI about this insight"
       >
-        <span className="ask-ai-sparkle">\u2728</span>
+        <span className="ask-ai-sparkle">✨</span>
         <span className="ask-ai-text">Ask AI</span>
       </button>
     </div>
@@ -49,9 +49,10 @@ interface Props {
   filter: InsightsFilter;
   onFilterChange: (filter: InsightsFilter) => void;
   collections: string[];
+  data: DashboardData;
 }
 
-export function InsightsTab({ insights, filter, onFilterChange, collections }: Props) {
+export function InsightsTab({ insights, filter, onFilterChange, collections, data }: Props) {
   const [asking, setAsking] = useState<Insight | null>(null);
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -208,7 +209,7 @@ export function InsightsTab({ insights, filter, onFilterChange, collections }: P
             </div>
           ))
       )}
-      <AskAIDialog insight={asking} onClose={() => setAsking(null)} />
+      <AskAIDialog insight={asking} data={data} onClose={() => setAsking(null)} />
     </>
   );
 }
