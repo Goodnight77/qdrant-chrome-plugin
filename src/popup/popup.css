@@ -1,27 +1,6 @@
-:root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-card: #0f3460;
-  --text-primary: #eee;
-  --text-secondary: #aaa;
-  --accent: #e94560;
-  --success: #4ade80;
-  --warning: #fbbf24;
-  --info: #60a5fa;
-  --error: #ef4444;
-  --border: rgba(255, 255, 255, 0.1);
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* Design tokens and base styles live in src/styles/variables.css */
 
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: var(--bg-primary);
-  color: var(--text-primary);
   width: 360px;
   min-height: 200px;
 }
@@ -40,8 +19,43 @@ body {
 }
 
 .header h1 {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--accent);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Theme toggle (compact variant for popup) */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.theme-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.theme-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
 }
 
 .btn-icon {
@@ -280,9 +294,9 @@ body {
 
 /* Update Banner (compact variant for popup) */
 .update-banner {
-  background: linear-gradient(135deg, rgba(96, 165, 250, 0.2), rgba(139, 92, 246, 0.15));
-  border: 1px solid rgba(96, 165, 250, 0.5);
-  border-radius: 8px;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: var(--radius-sm);
   padding: 8px 10px;
   margin-bottom: 10px;
   display: flex;
@@ -338,6 +352,6 @@ body {
 }
 
 .btn-update-dismiss:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--overlay-2);
   color: var(--text-primary);
 }

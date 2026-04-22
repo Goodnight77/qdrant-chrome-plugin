@@ -14,6 +14,7 @@ import { RequestsTab } from './tabs/RequestsTab';
 import { OptimizationsTab } from './tabs/OptimizationsTab';
 import { InsightsTab } from './tabs/InsightsTab';
 import { UpdateBanner } from '../components/UpdateBanner';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 type TabName = 'overview' | 'collections' | 'shards' | 'optimizations' | 'transfers' | 'cluster' | 'requests' | 'insights';
 
@@ -85,6 +86,7 @@ export function Dashboard() {
           {version && <span className="version-badge">v{version}</span>}
           {data && <span className="version-badge" style={{ color: nodeCount >= totalPeers ? 'var(--success)' : 'var(--warning)' }}>{nodeCount}/{totalPeers} nodes</span>}
           {lastUpdated && <span className="last-updated">Updated: {lastUpdated}</span>}
+          <ThemeToggle />
           <a
             className="btn btn-github"
             href="https://github.com/hkulekci/qdrant-chrome-plugin"

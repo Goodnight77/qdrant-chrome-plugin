@@ -1,21 +1,166 @@
+/*
+ * Shared design tokens — single source of truth.
+ * MV3 CSP blocks external fonts, so we rely on a modern system font stack
+ * (Inter if installed, Segoe UI Variable on Win11, SF on macOS).
+ */
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-card: #0f3460;
-  --text-primary: #eee;
-  --text-secondary: #aaa;
+  /* Brand accent — Qdrant red, identical in both themes */
   --accent: #e94560;
+  --accent-soft: rgba(233, 69, 96, 0.12);
+
+  /* Radius scale — inner elements tighter, outer containers softer */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
+
+  /* Typography */
+  --font-sans:
+    'Inter', -apple-system, BlinkMacSystemFont,
+    'Segoe UI Variable Text', 'Segoe UI',
+    system-ui, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    'JetBrains Mono', ui-monospace, 'SF Mono',
+    Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}
+
+/* ---- Dark theme (default when [data-theme] unset or ="dark") ---- */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-primary: #0f1014;
+  --bg-secondary: #15171c;
+  --bg-card: #1c1f26;
+  --bg-elevated: #23262e;
+
+  --text-primary: #eceef3;
+  --text-secondary: #9097a4;
+  --text-muted: #5a6170;
+
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  /* Semantic — lighter variants that pop on dark surfaces */
   --success: #4ade80;
   --warning: #fbbf24;
   --info: #60a5fa;
   --error: #ef4444;
-  --border: rgba(255, 255, 255, 0.1);
+  --perf: #5eead4;
+  --perf-soft: rgba(94, 234, 212, 0.12);
+
+  /* Theme-aware surface tints — flipped in light mode */
+  --overlay-1: rgba(255, 255, 255, 0.03);
+  --overlay-2: rgba(255, 255, 255, 0.06);
+  --overlay-3: rgba(255, 255, 255, 0.1);
+  --divider: rgba(255, 255, 255, 0.05);
+
+  /* Inset dark panel (used inside shard cells) */
+  --panel-inset: rgba(0, 0, 0, 0.3);
+
+  /* Shadows — tinted to match the dark base, never pure black */
+  --shadow-xs: 0 1px 2px rgba(8, 10, 14, 0.4);
+  --shadow-sm: 0 2px 8px rgba(8, 10, 14, 0.35), 0 1px 2px rgba(8, 10, 14, 0.2);
+  --shadow-md: 0 6px 20px rgba(8, 10, 14, 0.4), 0 2px 4px rgba(8, 10, 14, 0.2);
+  --shadow-lg: 0 20px 50px rgba(8, 10, 14, 0.55), 0 4px 10px rgba(8, 10, 14, 0.3);
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+/* ---- Light theme ---- */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-primary: #f7f8fa;
+  --bg-secondary: #ffffff;
+  --bg-card: #f1f3f7;
+  --bg-elevated: #ffffff;
+
+  --text-primary: #121419;
+  --text-secondary: #5a6170;
+  --text-muted: #9097a4;
+
+  --border: rgba(16, 24, 40, 0.08);
+  --border-strong: rgba(16, 24, 40, 0.16);
+
+  --overlay-1: rgba(16, 24, 40, 0.03);
+  --overlay-2: rgba(16, 24, 40, 0.05);
+  --overlay-3: rgba(16, 24, 40, 0.08);
+  --divider: rgba(16, 24, 40, 0.06);
+
+  --panel-inset: rgba(16, 24, 40, 0.04);
+
+  /* Soft, blue-tinted shadows appropriate for a light surface */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 2px 8px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08), 0 2px 4px rgba(16, 24, 40, 0.05);
+  --shadow-lg: 0 20px 40px rgba(16, 24, 40, 0.14), 0 4px 10px rgba(16, 24, 40, 0.06);
+
+  /* Darker semantic variants that remain legible on white surfaces */
+  --success: #16a34a;
+  --warning: #d97706;
+  --info: #2563eb;
+  --error: #dc2626;
+  --perf: #0d9488;
+  --perf-soft: rgba(13, 148, 136, 0.1);
+  --accent-soft: rgba(233, 69, 96, 0.1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   background: var(--bg-primary);
   color: var(--text-primary);
+  line-height: 1.5;
+}
+
+/* Tabular numerals for all numeric / monospace contexts — a data dashboard
+   without aligned digits reads like a spreadsheet with proportional fonts. */
+code, kbd, samp, pre,
+.info-table td:last-child,
+.meta-tag .val,
+.summary-stat .value,
+.raft-item .value,
+.shard-dist-stat-value,
+.requests-table .number,
+.opt-progress-numbers,
+.opt-task-duration,
+.version-badge,
+.cluster-item-url {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Accessible focus ring — single rule everywhere, per WCAG */
+:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

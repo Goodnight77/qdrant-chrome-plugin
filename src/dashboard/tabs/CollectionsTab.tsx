@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { DashboardData, Insight, CollectionInfo, VectorConfig, ClusterConfig, InsightsFilter } from '../../lib/types';
 import { DEFAULT_INSIGHTS_FILTER } from '../../lib/types';
 import { formatNumber } from '../../lib/format';
@@ -6,6 +6,8 @@ import { insightsForCollection } from '../../rules';
 import { DEFAULTS, isNonDefault } from '../../lib/qdrant-defaults';
 import { QdrantApi } from '../../lib/qdrant-api';
 import { ConfirmDialog } from '../ConfirmDialog';
+
+type SortKey = 'name' | 'points' | 'segments' | 'insights';
 
 // Renders a value with a marker if it differs from default
 function CfgVal({ value, defaultValue, display }: { value: unknown; defaultValue: unknown; display: string | React.ReactNode }) {
@@ -45,7 +47,7 @@ function InsightBadges({ insights, collectionName, onNavigate }: { insights: Ins
     onNavigate({ ...DEFAULT_INSIGHTS_FILTER, collection: collectionName, levels: [level] });
   };
   return (
-    <span style={{ display: 'flex', gap: 4 }}>
+    <span className="collection-row-insights">
       {c > 0 && <button className="insight-count-badge critical" onClick={open('critical')} title="Open Insights tab">{c} critical</button>}
       {w > 0 && <button className="insight-count-badge warning" onClick={open('warning')} title="Open Insights tab">{w} warning</button>}
       {p > 0 && <button className="insight-count-badge performance" onClick={open('performance')} title="Open Insights tab">{p} tip{p > 1 ? 's' : ''}</button>}
@@ -53,7 +55,66 @@ function InsightBadges({ insights, collectionName, onNavigate }: { insights: Ins
   );
 }
 
-function CollectionCard({ name, info, insights, cluster, onOptimized, onNavigateInsights }: { name: string; info: CollectionInfo; insights: Insight[]; cluster: ClusterConfig | null; onOptimized: () => void; onNavigateInsights: (filter?: Partial<InsightsFilter>) => void }) {
+function CollectionRow({
+  name, info, insights, expanded, onToggle, onNavigateInsights,
+}: {
+  name: string;
+  info: CollectionInfo;
+  insights: Insight[];
+  expanded: boolean;
+  onToggle: () => void;
+  onNavigateInsights: (filter?: Partial<InsightsFilter>) => void;
+}) {
+  const config = info.config?.params || {} as CollectionInfo['config']['params'];
+  const vectors = config.vectors || {};
+  const sparseVectors = config.sparse_vectors || {};
+  const named = isNamedVectors(vectors);
+  const denseNames = named ? Object.keys(vectors) : [];
+  const sparseCount = Object.keys(sparseVectors).length;
+  const vectorSummary = named
+    ? `${denseNames.length} named`
+    : `${(vectors as VectorConfig).size}d · ${(vectors as VectorConfig).distance}`;
+  const statusColor = info.status === 'green' ? 'green' : info.status === 'yellow' ? 'yellow' : 'red';
+
+  return (
+    <button
+      type="button"
+      className={`collection-row ${expanded ? 'expanded' : ''}`}
+      aria-expanded={expanded}
+      onClick={onToggle}
+    >
+      <span className={`collection-row-status ${statusColor}`} title={`status: ${info.status || 'unknown'}`} />
+      <span className="collection-row-name">{name}</span>
+      <span className="collection-row-metric primary">
+        <span className="m-val">{formatNumber(info.points_count)}</span>
+        <span className="m-label">points</span>
+      </span>
+      <span className="collection-row-metric">
+        <span className="m-val">{info.segments_count ?? 0}</span>
+        <span className="m-label">seg</span>
+      </span>
+      <span className="collection-row-vectors">
+        <span className="m-val">{vectorSummary}</span>
+        {sparseCount > 0 && <span className="m-sparse">+{sparseCount} sparse</span>}
+      </span>
+      <InsightBadges insights={insights} collectionName={name} onNavigate={onNavigateInsights} />
+      <span className="collection-row-chevron" aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </span>
+    </button>
+  );
+}
+
+function CollectionDetail({
+  name, info, cluster, onOptimized,
+}: {
+  name: string;
+  info: CollectionInfo;
+  cluster: ClusterConfig | null;
+  onOptimized: () => void;
+}) {
   const [showOptimize, setShowOptimize] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [optimizeError, setOptimizeError] = useState<string | null>(null);
@@ -88,11 +149,8 @@ function CollectionCard({ name, info, insights, cluster, onOptimized, onNavigate
   const payloadSchema = info.payload_schema || {};
   const payloadEntries = Object.entries(payloadSchema);
   const sparseNames = Object.keys(sparseVectors);
-
-  const statusColor = info.status === 'green' ? 'green' : info.status === 'yellow' ? 'yellow' : 'red';
   const named = isNamedVectors(vectors);
   const denseNames = named ? Object.keys(vectors) : [];
-  const vectorSummary = named ? `${denseNames.length} named` : `${(vectors as VectorConfig).size}d / ${(vectors as VectorConfig).distance}`;
 
   let quantDisplay = 'None';
   let quantDetail = '';
@@ -104,27 +162,11 @@ function CollectionCard({ name, info, insights, cluster, onOptimized, onNavigate
   }
 
   return (
-    <div className="collection-card">
-      <div className="collection-header">
-        <span className="collection-name">{name}</span>
-        <div className="collection-meta">
-          <span className={`status-badge ${statusColor}`}>{info.status || '?'}</span>
-          <span className="meta-tag"><span className="label">Points:</span><span className="val">{formatNumber(info.points_count)}</span></span>
-          <span className="meta-tag"><span className="label">Segments:</span><span className="val">{info.segments_count || 0}</span></span>
-          <span className="meta-tag"><span className="label">Shards:</span><span className="val"><CfgVal value={config.shard_number} defaultValue={DEFAULTS.params.shard_number} display={config.shard_number || '?'} /></span></span>
-          <span className="meta-tag"><span className="label">Replication:</span><span className="val"><CfgVal value={config.replication_factor} defaultValue={DEFAULTS.params.replication_factor} display={config.replication_factor || '?'} /></span></span>
-          <span className="meta-tag"><span className="label">Dense:</span><span className="val">{vectorSummary}</span></span>
-          {sparseNames.length > 0 && <span className="meta-tag"><span className="label">Sparse:</span><span className="val">{sparseNames.length}</span></span>}
-          <InsightBadges insights={insights} collectionName={name} onNavigate={onNavigateInsights} />
-          <button
-            className="btn btn-optimize"
-            onClick={() => { setOptimizeError(null); setShowOptimize(true); }}
-            disabled={!cluster || optimizing}
-            title="Trigger optimizer to merge segments and build indexes"
-          >
-            {optimizing ? 'Optimizing...' : optimizeSuccess ? 'Triggered ✓' : 'Optimize'}
-          </button>
-        </div>
+    <div className="collection-detail">
+      <div className="collection-detail-meta">
+        <span className="meta-tag"><span className="label">Shards</span><span className="val"><CfgVal value={config.shard_number} defaultValue={DEFAULTS.params.shard_number} display={config.shard_number || '?'} /></span></span>
+        <span className="meta-tag"><span className="label">Replication</span><span className="val"><CfgVal value={config.replication_factor} defaultValue={DEFAULTS.params.replication_factor} display={config.replication_factor || '?'} /></span></span>
+        <span className="meta-tag"><span className="label">Indexed</span><span className="val">{formatNumber(info.indexed_vectors_count)}</span></span>
       </div>
 
       <ConfirmDialog
@@ -140,14 +182,14 @@ function CollectionCard({ name, info, insights, cluster, onOptimized, onNavigate
           <>
             <p>This will trigger the Qdrant optimizer to re-process all shards of this collection, merging small segments and building missing indexes.</p>
             <div className="dialog-warning">
-              <strong>⚠️ Heavy operation</strong>
+              <strong>&#9888;&#65039; Heavy operation</strong>
               <ul>
                 <li>Increased <strong>CPU</strong> usage while optimization runs</li>
                 <li>Higher <strong>memory</strong> usage (new segments are built in parallel with old ones)</li>
                 <li>Additional <strong>disk space</strong> required until old segments are freed</li>
                 <li>Search latency may spike during the operation</li>
               </ul>
-              <p>Particularly useful after a bulk indexing run — but avoid running it during peak traffic.</p>
+              <p>Particularly useful after a bulk indexing run &mdash; but avoid running it during peak traffic.</p>
             </div>
             {optimizeError && <p className="dialog-error">Error: {optimizeError}</p>}
           </>
@@ -188,7 +230,17 @@ function CollectionCard({ name, info, insights, cluster, onOptimized, onNavigate
         </div>
 
         <div className="config-section">
-          <h3>Optimizer</h3>
+          <div className="config-section-header">
+            <h3>Optimizer</h3>
+            <button
+              className="btn btn-optimize"
+              onClick={() => { setOptimizeError(null); setShowOptimize(true); }}
+              disabled={!cluster || optimizing}
+              title="Trigger optimizer to merge segments and build indexes"
+            >
+              {optimizing ? 'Optimizing...' : optimizeSuccess ? 'Triggered \u2713' : 'Run optimizer'}
+            </button>
+          </div>
           <table className="info-table"><tbody>
             <tr><td>Status</td><td><OptimizerStatus status={info.optimizer_status} /></td></tr>
             <tr><td>Indexing Threshold</td><td><CfgVal value={optimizer?.indexing_threshold} defaultValue={DEFAULTS.optimizer.indexing_threshold} display={formatNumber(optimizer?.indexing_threshold)} /></td></tr>
@@ -206,7 +258,6 @@ function CollectionCard({ name, info, insights, cluster, onOptimized, onNavigate
             <tr><td>On Disk Payload</td><td><CfgVal value={config.on_disk_payload} defaultValue={DEFAULTS.params.on_disk_payload} display={config.on_disk_payload ? 'Yes' : 'No'} /></td></tr>
             <tr><td>Quantization</td><td><CfgVal value={quantization != null} defaultValue={false} display={quantDisplay} /></td></tr>
             {quantDetail && <tr><td></td><td style={{ fontSize: '0.75rem', opacity: 0.7 }}>{quantDetail}</td></tr>}
-            <tr><td>Indexed Vectors</td><td>{formatNumber(info.indexed_vectors_count)}</td></tr>
             <tr><td>WAL Capacity</td><td><CfgVal value={wal?.wal_capacity_mb} defaultValue={DEFAULTS.wal.wal_capacity_mb} display={`${wal?.wal_capacity_mb ?? 'N/A'} MB`} /></td></tr>
             <tr><td>Write Consistency</td><td><CfgVal value={config.write_consistency_factor} defaultValue={DEFAULTS.params.write_consistency_factor} display={config.write_consistency_factor ?? 'N/A'} /></td></tr>
           </tbody></table>
@@ -267,21 +318,201 @@ function CollectionCard({ name, info, insights, cluster, onOptimized, onNavigate
   );
 }
 
-export function CollectionsTab({ data, insights, cluster, onRefresh, onNavigateInsights }: { data: DashboardData; insights: Insight[]; cluster: ClusterConfig | null; onRefresh: () => void; onNavigateInsights: (filter?: Partial<InsightsFilter>) => void }) {
+function CollectionsToolbar({
+  search, onSearch, sort, onSort, onlyInsights, onOnlyInsights,
+  shown, total, allExpanded, onToggleAll,
+}: {
+  search: string;
+  onSearch: (v: string) => void;
+  sort: SortKey;
+  onSort: (k: SortKey) => void;
+  onlyInsights: boolean;
+  onOnlyInsights: (v: boolean) => void;
+  shown: number;
+  total: number;
+  allExpanded: boolean;
+  onToggleAll: () => void;
+}) {
+  return (
+    <div className="collections-toolbar">
+      <div className="collections-toolbar-left">
+        <div className="collections-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            type="search"
+            value={search}
+            onChange={e => onSearch(e.target.value)}
+            placeholder="Search collections..."
+            aria-label="Search collections"
+          />
+          {search && (
+            <button className="collections-search-clear" onClick={() => onSearch('')} aria-label="Clear search">&times;</button>
+          )}
+        </div>
+        <label className="collections-filter-check">
+          <input type="checkbox" checked={onlyInsights} onChange={e => onOnlyInsights(e.target.checked)} />
+          <span>Only with insights</span>
+        </label>
+      </div>
+      <div className="collections-toolbar-right">
+        <label className="collections-sort">
+          <span className="collections-sort-label">Sort</span>
+          <select value={sort} onChange={e => onSort(e.target.value as SortKey)}>
+            <option value="name">Name</option>
+            <option value="points">Points (desc)</option>
+            <option value="segments">Segments (desc)</option>
+            <option value="insights">Insights (severity)</option>
+          </select>
+        </label>
+        <button className="collections-expand-all" onClick={onToggleAll} type="button">
+          {allExpanded ? 'Collapse all' : 'Expand all'}
+        </button>
+        <span className="collections-count">
+          {shown === total ? `${total}` : `${shown} / ${total}`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function severityScore(insights: Insight[]): number {
+  return insights.reduce((acc, i) => {
+    if (i.level === 'critical') return acc + 1000;
+    if (i.level === 'warning') return acc + 100;
+    if (i.level === 'performance') return acc + 10;
+    return acc + 1;
+  }, 0);
+}
+
+export function CollectionsTab({
+  data, insights, cluster, onRefresh, onNavigateInsights,
+}: {
+  data: DashboardData;
+  insights: Insight[];
+  cluster: ClusterConfig | null;
+  onRefresh: () => void;
+  onNavigateInsights: (filter?: Partial<InsightsFilter>) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortKey>('name');
+  const [onlyInsights, setOnlyInsights] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    // Auto-expand collections that have critical insights on first render
+    const autoOpen = new Set<string>();
+    for (const i of insights) {
+      if (i.level === 'critical' && i.collection) autoOpen.add(i.collection);
+    }
+    return autoOpen;
+  });
+
+  const enriched = useMemo(() => {
+    return data.collections.map(name => {
+      const detail = data.collectionDetails[name];
+      const colInsights = insightsForCollection(insights, name);
+      return { name, detail, insights: colInsights };
+    });
+  }, [data, insights]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = enriched;
+    if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
+    if (onlyInsights) list = list.filter(c => c.insights.length > 0);
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      switch (sort) {
+        case 'name': return a.name.localeCompare(b.name);
+        case 'points': return (b.detail?.info?.points_count ?? 0) - (a.detail?.info?.points_count ?? 0);
+        case 'segments': return (b.detail?.info?.segments_count ?? 0) - (a.detail?.info?.segments_count ?? 0);
+        case 'insights': return severityScore(b.insights) - severityScore(a.insights);
+      }
+    });
+    return sorted;
+  }, [enriched, search, onlyInsights, sort]);
+
+  const allExpanded = filtered.length > 0 && filtered.every(c => expanded.has(c.name));
+
+  const toggleOne = (name: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allExpanded) setExpanded(new Set());
+    else setExpanded(new Set(filtered.map(c => c.name)));
+  };
+
   if (data.collections.length === 0) {
     return <div className="card"><p style={{ color: 'var(--text-secondary)' }}>No collections found</p></div>;
   }
 
   return (
     <>
-      {data.collections.map(name => {
-        const detail = data.collectionDetails[name];
-        if (detail?.error) {
-          return <div key={name} className="collection-card"><span className="collection-name">{name}</span><span className="status-badge red">Error</span><p style={{ color: 'var(--error)' }}>{detail.error}</p></div>;
-        }
-        if (!detail?.info) return null;
-        return <CollectionCard key={name} name={name} info={detail.info} insights={insightsForCollection(insights, name)} cluster={cluster} onOptimized={onRefresh} onNavigateInsights={onNavigateInsights} />;
-      })}
+      <CollectionsToolbar
+        search={search}
+        onSearch={setSearch}
+        sort={sort}
+        onSort={setSort}
+        onlyInsights={onlyInsights}
+        onOnlyInsights={setOnlyInsights}
+        shown={filtered.length}
+        total={data.collections.length}
+        allExpanded={allExpanded}
+        onToggleAll={toggleAll}
+      />
+
+      {filtered.length === 0 ? (
+        <div className="collection-empty">
+          <p>No collections match the current filters.</p>
+          <button className="btn btn-secondary" onClick={() => { setSearch(''); setOnlyInsights(false); }}>Clear filters</button>
+        </div>
+      ) : (
+        <div className="collection-list">
+          {filtered.map(({ name, detail, insights: colInsights }) => {
+            if (detail?.error) {
+              return (
+                <div key={name} className="collection-card collection-error">
+                  <div className="collection-row collection-row-errored">
+                    <span className="collection-row-status red" />
+                    <span className="collection-row-name">{name}</span>
+                    <span className="status-badge red">Error</span>
+                    <span className="collection-error-msg">{detail.error}</span>
+                  </div>
+                </div>
+              );
+            }
+            if (!detail?.info) return null;
+            const isExpanded = expanded.has(name);
+            return (
+              <div key={name} className={`collection-card ${isExpanded ? 'expanded' : ''}`}>
+                <CollectionRow
+                  name={name}
+                  info={detail.info}
+                  insights={colInsights}
+                  expanded={isExpanded}
+                  onToggle={() => toggleOne(name)}
+                  onNavigateInsights={onNavigateInsights}
+                />
+                {isExpanded && (
+                  <CollectionDetail
+                    name={name}
+                    info={detail.info}
+                    cluster={cluster}
+                    onOptimized={onRefresh}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }

@@ -11,7 +11,7 @@ const ICONS: Record<InsightLevel, string> = {
 const LEVEL_COLOR: Record<InsightLevel, string> = {
   critical: 'var(--error)',
   warning: 'var(--warning)',
-  performance: '#a78bfa',
+  performance: 'var(--perf)',
   info: 'var(--info)',
 };
 
