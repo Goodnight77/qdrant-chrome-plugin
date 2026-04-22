@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { DashboardData, Insight, CollectionInfo, VectorConfig, ClusterConfig, InsightsFilter } from '../../lib/types';
 import { DEFAULT_INSIGHTS_FILTER } from '../../lib/types';
 import { formatNumber } from '../../lib/format';
@@ -9,19 +9,88 @@ import { ConfirmDialog } from '../ConfirmDialog';
 
 type SortKey = 'name' | 'points' | 'segments' | 'insights';
 
-// Renders a value with a marker if it differs from default
-function CfgVal({ value, defaultValue, display }: { value: unknown; defaultValue: unknown; display: string | React.ReactNode }) {
-  const changed = isNonDefault(value, defaultValue);
+// Boolean rendered as a compact mini-badge.
+function YesNo({ value }: { value: boolean | null | undefined }) {
+  if (value == null) return <span className="val-muted">&mdash;</span>;
+  return value
+    ? <span className="val-bool yes">Yes</span>
+    : <span className="val-bool no">No</span>;
+}
+
+function Muted({ children }: { children: ReactNode }) {
+  return <span className="val-muted">{children}</span>;
+}
+
+function formatDefault(v: unknown): string {
+  if (v === true) return 'yes';
+  if (v === false) return 'no';
+  if (v == null) return 'auto';
+  if (typeof v === 'number') return formatNumber(v);
+  return String(v);
+}
+
+/*
+ * One configuration row inside a section.
+ *   label    — user-facing field name
+ *   hint     — explanation shown on hover (what does this param do)
+ *   value    — current value (may be undefined → renders as em-dash)
+ *   default  — if provided, row is marked custom when value != default
+ *               and shows a small "default: X" subtitle
+ *   display  — optional pre-formatted value node (overrides `value` render)
+ */
+function ConfigRow({
+  label, hint, value, defaultValue, display,
+}: {
+  label: string;
+  hint?: string;
+  value?: unknown;
+  defaultValue?: unknown;
+  display?: ReactNode;
+}) {
+  const hasDefault = defaultValue !== undefined;
+  const changed = hasDefault && isNonDefault(value, defaultValue);
+  let rendered: ReactNode = display;
+  if (rendered === undefined) {
+    if (value == null) rendered = <Muted>&mdash;</Muted>;
+    else if (typeof value === 'boolean') rendered = <YesNo value={value} />;
+    else if (typeof value === 'number') rendered = formatNumber(value);
+    else rendered = String(value);
+  }
   return (
-    <span>
-      {display}
-      {changed && (
-        <span className="cfg-changed-wrap">
-          <span className="cfg-changed">&#9888;</span>
-          <span className="cfg-tooltip">Default: {String(defaultValue ?? 'auto')}</span>
-        </span>
-      )}
-    </span>
+    <div className={`config-row ${changed ? 'is-custom' : ''}`}>
+      <div className="config-row-label" title={hint || label}>
+        <span className="config-row-label-text">{label}</span>
+        {hint && <span className="config-row-hint-dot" aria-hidden>?</span>}
+      </div>
+      <div className="config-row-value">
+        <span className="config-row-value-main">{rendered}</span>
+        {changed && (
+          <span className="config-row-default" title={`Default: ${formatDefault(defaultValue)}`}>
+            default: {formatDefault(defaultValue)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ConfigSection({ title, icon, children, action }: {
+  title: string;
+  icon?: ReactNode;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="config-section">
+      <div className="config-section-header">
+        <h3>
+          {icon && <span className="config-section-icon" aria-hidden>{icon}</span>}
+          <span>{title}</span>
+        </h3>
+        {action}
+      </div>
+      <div className="config-rows">{children}</div>
+    </div>
   );
 }
 
@@ -30,10 +99,10 @@ function isNamedVectors(vectors: Record<string, VectorConfig> | VectorConfig): v
 }
 
 function OptimizerStatus({ status }: { status: string | { error: string } }) {
-  if (!status) return <>N/A</>;
-  if (status === 'ok') return <span style={{ color: 'var(--success)' }}>OK</span>;
-  if (status === 'indexing') return <span style={{ color: 'var(--warning)' }}>Indexing...</span>;
-  if (typeof status === 'object' && 'error' in status) return <span style={{ color: 'var(--error)' }}>Error</span>;
+  if (!status) return <Muted>&mdash;</Muted>;
+  if (status === 'ok') return <span className="val-status ok">OK</span>;
+  if (status === 'indexing') return <span className="val-status indexing">Indexing&hellip;</span>;
+  if (typeof status === 'object' && 'error' in status) return <span className="val-status error">Error</span>;
   return <>{String(status)}</>;
 }
 
@@ -164,9 +233,24 @@ function CollectionDetail({
   return (
     <div className="collection-detail">
       <div className="collection-detail-meta">
-        <span className="meta-tag"><span className="label">Shards</span><span className="val"><CfgVal value={config.shard_number} defaultValue={DEFAULTS.params.shard_number} display={config.shard_number || '?'} /></span></span>
-        <span className="meta-tag"><span className="label">Replication</span><span className="val"><CfgVal value={config.replication_factor} defaultValue={DEFAULTS.params.replication_factor} display={config.replication_factor || '?'} /></span></span>
-        <span className="meta-tag"><span className="label">Indexed</span><span className="val">{formatNumber(info.indexed_vectors_count)}</span></span>
+        <span className="meta-tag">
+          <span className="label">Shards</span>
+          <span className="val">
+            {config.shard_number ?? '?'}
+            {isNonDefault(config.shard_number, DEFAULTS.params.shard_number) && <span className="meta-tag-custom" title={`Default: ${DEFAULTS.params.shard_number}`} />}
+          </span>
+        </span>
+        <span className="meta-tag">
+          <span className="label">Replication</span>
+          <span className="val">
+            {config.replication_factor ?? '?'}
+            {isNonDefault(config.replication_factor, DEFAULTS.params.replication_factor) && <span className="meta-tag-custom" title={`Default: ${DEFAULTS.params.replication_factor}`} />}
+          </span>
+        </span>
+        <span className="meta-tag">
+          <span className="label">Indexed</span>
+          <span className="val">{formatNumber(info.indexed_vectors_count)}</span>
+        </span>
       </div>
 
       <ConfirmDialog
@@ -197,74 +281,190 @@ function CollectionDetail({
       />
 
       <div className="config-grid">
-        <div className="config-section">
-          <h3>Dense Vectors</h3>
-          <table className="info-table"><tbody>
-            {named ? denseNames.map(vn => {
+        <ConfigSection title={`Vectors${named ? ` (${denseNames.length} named)` : ''}`} icon="&#x25A3;">
+          {named ? (
+            denseNames.map(vn => {
               const v = (vectors as Record<string, VectorConfig>)[vn];
-              return <tr key={vn}><td>{vn}</td><td>{v.size}d / {v.distance}{v.on_disk ? ' (on disk)' : ''}{v.hnsw_config ? ` m:${v.hnsw_config.m} ef:${v.hnsw_config.ef_construct}` : ''}</td></tr>;
-            }) : <>
-              <tr><td>Dimensions</td><td>{(vectors as VectorConfig).size}</td></tr>
-              <tr><td>Distance</td><td>{(vectors as VectorConfig).distance}</td></tr>
-            </>}
-          </tbody></table>
-        </div>
+              const hints: string[] = [];
+              if (v.on_disk) hints.push('on disk');
+              if (v.hnsw_config) hints.push(`HNSW m:${v.hnsw_config.m} ef:${v.hnsw_config.ef_construct}`);
+              return (
+                <div key={vn} className="config-row">
+                  <div className="config-row-label">
+                    <span className="vector-name">{vn}</span>
+                  </div>
+                  <div className="config-row-value">
+                    <span className="config-row-value-main"><span className="val-num">{v.size}d</span> &middot; {v.distance}</span>
+                    {hints.length > 0 && <span className="config-row-default">{hints.join(' · ')}</span>}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="config-row">
+              <div className="config-row-label">
+                <span className="vector-name">default</span>
+              </div>
+              <div className="config-row-value">
+                <span className="config-row-value-main">
+                  <span className="val-num">{(vectors as VectorConfig).size}d</span> &middot; {(vectors as VectorConfig).distance}
+                </span>
+              </div>
+            </div>
+          )}
+          {sparseNames.map(sn => (
+            <div key={sn} className="config-row">
+              <div className="config-row-label">
+                <span className="vector-name sparse">{sn}</span>
+                <span className="config-row-tag">sparse</span>
+              </div>
+              <div className="config-row-value">
+                <span className="config-row-value-main">
+                  <span className={`val-storage ${sparseVectors[sn]?.index?.on_disk ? 'disk' : 'memory'}`}>
+                    {sparseVectors[sn]?.index?.on_disk ? 'on disk' : 'in memory'}
+                  </span>
+                </span>
+              </div>
+            </div>
+          ))}
+        </ConfigSection>
 
-        {sparseNames.length > 0 && (
-          <div className="config-section">
-            <h3>Sparse Vectors</h3>
-            <table className="info-table"><tbody>
-              {sparseNames.map(sn => <tr key={sn}><td>{sn}</td><td>{sparseVectors[sn]?.index?.on_disk ? 'on disk' : 'in memory'}</td></tr>)}
-            </tbody></table>
-          </div>
-        )}
+        <ConfigSection title="HNSW Index" icon="&#x25CE;">
+          <ConfigRow
+            label="M"
+            hint="Max connections per node in the HNSW graph. Higher = better recall at the cost of RAM."
+            value={hnsw?.m}
+            defaultValue={DEFAULTS.hnsw.m}
+          />
+          <ConfigRow
+            label="EF Construct"
+            hint="Construction-time search depth. Higher = better graph quality, slower indexing."
+            value={hnsw?.ef_construct}
+            defaultValue={DEFAULTS.hnsw.ef_construct}
+          />
+          <ConfigRow
+            label="Full scan threshold"
+            hint="Below this point count, search does a brute-force scan instead of using HNSW."
+            value={hnsw?.full_scan_threshold}
+            defaultValue={DEFAULTS.hnsw.full_scan_threshold}
+          />
+          <ConfigRow
+            label="HNSW on disk"
+            hint="Store the HNSW graph on disk instead of RAM. Trades latency for memory."
+            value={hnsw?.on_disk}
+            defaultValue={DEFAULTS.hnsw.on_disk}
+          />
+        </ConfigSection>
 
-        <div className="config-section">
-          <h3>HNSW Config (global)</h3>
-          <table className="info-table"><tbody>
-            <tr><td>M</td><td><CfgVal value={hnsw?.m} defaultValue={DEFAULTS.hnsw.m} display={hnsw?.m ?? 'N/A'} /></td></tr>
-            <tr><td>EF Construct</td><td><CfgVal value={hnsw?.ef_construct} defaultValue={DEFAULTS.hnsw.ef_construct} display={hnsw?.ef_construct ?? 'N/A'} /></td></tr>
-            <tr><td>Full Scan Threshold</td><td><CfgVal value={hnsw?.full_scan_threshold} defaultValue={DEFAULTS.hnsw.full_scan_threshold} display={formatNumber(hnsw?.full_scan_threshold)} /></td></tr>
-            <tr><td>On Disk</td><td><CfgVal value={hnsw?.on_disk} defaultValue={DEFAULTS.hnsw.on_disk} display={hnsw?.on_disk ? 'Yes' : 'No'} /></td></tr>
-          </tbody></table>
-        </div>
-
-        <div className="config-section">
-          <div className="config-section-header">
-            <h3>Optimizer</h3>
+        <ConfigSection
+          title="Optimizer"
+          icon="&#x25A2;"
+          action={
             <button
               className="btn btn-optimize"
               onClick={() => { setOptimizeError(null); setShowOptimize(true); }}
               disabled={!cluster || optimizing}
               title="Trigger optimizer to merge segments and build indexes"
             >
-              {optimizing ? 'Optimizing...' : optimizeSuccess ? 'Triggered \u2713' : 'Run optimizer'}
+              {optimizing ? 'Optimizing\u2026' : optimizeSuccess ? 'Triggered \u2713' : 'Run optimizer'}
             </button>
-          </div>
-          <table className="info-table"><tbody>
-            <tr><td>Status</td><td><OptimizerStatus status={info.optimizer_status} /></td></tr>
-            <tr><td>Indexing Threshold</td><td><CfgVal value={optimizer?.indexing_threshold} defaultValue={DEFAULTS.optimizer.indexing_threshold} display={formatNumber(optimizer?.indexing_threshold)} /></td></tr>
-            <tr><td>Flush Interval</td><td><CfgVal value={optimizer?.flush_interval_sec} defaultValue={DEFAULTS.optimizer.flush_interval_sec} display={`${optimizer?.flush_interval_sec ?? 'N/A'}s`} /></td></tr>
-            <tr><td>Deleted Threshold</td><td><CfgVal value={optimizer?.deleted_threshold} defaultValue={DEFAULTS.optimizer.deleted_threshold} display={optimizer?.deleted_threshold ?? 'N/A'} /></td></tr>
-            <tr><td>Max Segment Size</td><td><CfgVal value={optimizer?.max_segment_size} defaultValue={DEFAULTS.optimizer.max_segment_size} display={optimizer?.max_segment_size ? formatNumber(optimizer.max_segment_size) : 'Auto'} /></td></tr>
-            <tr><td>Default Segments</td><td><CfgVal value={optimizer?.default_segment_number} defaultValue={DEFAULTS.optimizer.default_segment_number} display={optimizer?.default_segment_number ?? 'Auto'} /></td></tr>
-            <tr><td>Prevent Unoptimized</td><td><CfgVal value={optimizer?.prevent_unoptimized} defaultValue={DEFAULTS.optimizer.prevent_unoptimized} display={optimizer?.prevent_unoptimized ? 'Yes' : 'No'} /></td></tr>
-          </tbody></table>
-        </div>
+          }
+        >
+          <ConfigRow label="Status" display={<OptimizerStatus status={info.optimizer_status} />} />
+          <ConfigRow
+            label="Indexing threshold"
+            hint="Min points per segment before the optimizer builds an HNSW index."
+            value={optimizer?.indexing_threshold}
+            defaultValue={DEFAULTS.optimizer.indexing_threshold}
+          />
+          <ConfigRow
+            label="Flush interval"
+            hint="How often the WAL flushes to disk."
+            value={optimizer?.flush_interval_sec}
+            defaultValue={DEFAULTS.optimizer.flush_interval_sec}
+            display={optimizer?.flush_interval_sec != null ? `${optimizer.flush_interval_sec}s` : <Muted>&mdash;</Muted>}
+          />
+          <ConfigRow
+            label="Deleted threshold"
+            hint="Fraction of deleted points that triggers optimizer to rebuild segments (0–1)."
+            value={optimizer?.deleted_threshold}
+            defaultValue={DEFAULTS.optimizer.deleted_threshold}
+          />
+          <ConfigRow
+            label="Max segment size"
+            hint="Upper bound on segment point count before it is split."
+            value={optimizer?.max_segment_size}
+            defaultValue={DEFAULTS.optimizer.max_segment_size}
+            display={optimizer?.max_segment_size ? formatNumber(optimizer.max_segment_size) : <Muted>Auto</Muted>}
+          />
+          <ConfigRow
+            label="Default segments"
+            hint="Target number of segments per shard."
+            value={optimizer?.default_segment_number}
+            defaultValue={DEFAULTS.optimizer.default_segment_number}
+            display={optimizer?.default_segment_number ? optimizer.default_segment_number : <Muted>Auto</Muted>}
+          />
+          <ConfigRow
+            label="Prevent unoptimized"
+            hint="Reject searches on segments that haven't been indexed yet."
+            value={optimizer?.prevent_unoptimized}
+            defaultValue={DEFAULTS.optimizer.prevent_unoptimized}
+          />
+        </ConfigSection>
 
-        <div className="config-section">
-          <h3>Storage & Quantization</h3>
-          <table className="info-table"><tbody>
-            <tr><td>On Disk Payload</td><td><CfgVal value={config.on_disk_payload} defaultValue={DEFAULTS.params.on_disk_payload} display={config.on_disk_payload ? 'Yes' : 'No'} /></td></tr>
-            <tr><td>Quantization</td><td><CfgVal value={quantization != null} defaultValue={false} display={quantDisplay} /></td></tr>
-            {quantDetail && <tr><td></td><td style={{ fontSize: '0.75rem', opacity: 0.7 }}>{quantDetail}</td></tr>}
-            <tr><td>WAL Capacity</td><td><CfgVal value={wal?.wal_capacity_mb} defaultValue={DEFAULTS.wal.wal_capacity_mb} display={`${wal?.wal_capacity_mb ?? 'N/A'} MB`} /></td></tr>
-            <tr><td>Write Consistency</td><td><CfgVal value={config.write_consistency_factor} defaultValue={DEFAULTS.params.write_consistency_factor} display={config.write_consistency_factor ?? 'N/A'} /></td></tr>
-          </tbody></table>
-        </div>
+        <ConfigSection title="Storage" icon="&#x25A4;">
+          <ConfigRow
+            label="On disk payload"
+            hint="Store payload on disk instead of RAM."
+            value={config.on_disk_payload}
+            defaultValue={DEFAULTS.params.on_disk_payload}
+          />
+          <ConfigRow
+            label="WAL capacity"
+            hint="Size of the write-ahead log buffer."
+            value={wal?.wal_capacity_mb}
+            defaultValue={DEFAULTS.wal.wal_capacity_mb}
+            display={wal?.wal_capacity_mb != null ? `${wal.wal_capacity_mb} MB` : <Muted>&mdash;</Muted>}
+          />
+          <ConfigRow
+            label="Write consistency"
+            hint="Number of replicas that must acknowledge a write."
+            value={config.write_consistency_factor}
+            defaultValue={DEFAULTS.params.write_consistency_factor}
+          />
+        </ConfigSection>
 
-        <div className="config-section">
-          <h3>Payload Indexes {payloadEntries.length > 0 ? `(${payloadEntries.length})` : ''}</h3>
+        <ConfigSection
+          title="Quantization"
+          icon="&#x25A6;"
+          action={quantization ? <span className="quant-pill enabled">enabled</span> : <span className="quant-pill disabled">disabled</span>}
+        >
+          {quantization ? (
+            <>
+              <ConfigRow label="Method" display={<span className="val-strong">{quantDisplay}</span>} />
+              {quantization.scalar && (
+                <>
+                  <ConfigRow label="Type" display={quantization.scalar.type} />
+                  <ConfigRow label="Quantile" display={quantization.scalar.quantile ?? <Muted>default</Muted>} />
+                  <ConfigRow label="Always in RAM" value={quantization.scalar.always_ram ?? false} />
+                </>
+              )}
+              {quantization.product && (
+                <ConfigRow label="Compression" display={quantization.product.compression} />
+              )}
+              {quantDetail && !quantization.scalar && (
+                <ConfigRow label="Params" display={<Muted>{quantDetail}</Muted>} />
+              )}
+            </>
+          ) : (
+            <p className="config-section-empty">Not configured. Enable to reduce vector memory footprint at the cost of some recall.</p>
+          )}
+        </ConfigSection>
+
+        <ConfigSection
+          title={`Payload indexes${payloadEntries.length > 0 ? ` (${payloadEntries.length})` : ''}`}
+          icon="&#x25A7;"
+        >
           {payloadEntries.length > 0 ? (
             <div className="payload-index-list">
               {payloadEntries.map(([field, schema]) => {
@@ -277,18 +477,18 @@ function CollectionDetail({
                     <span className="payload-index-field">{field}</span>
                     <span className={`payload-index-type type-${type}`}>{type}</span>
                     <span className="payload-index-flags">
-                      {p.is_tenant && <span className="payload-flag tenant" title="Tenant-optimized index (non-default)">tenant<span className="cfg-changed">&#9888;</span></span>}
-                      {p.is_principal && <span className="payload-flag principal" title="Principal field for tenant routing (non-default)">principal<span className="cfg-changed">&#9888;</span></span>}
+                      {p.is_tenant && <span className="payload-flag tenant" title="Tenant-optimized index (non-default)">tenant</span>}
+                      {p.is_principal && <span className="payload-flag principal" title="Principal field for tenant routing (non-default)">principal</span>}
                       {p.on_disk ? (
-                        <span className="payload-flag on-disk" title="Stored on disk. Default is in-memory — this trades RAM for disk I/O on filter queries.">on disk<span className="cfg-changed">&#9888;</span></span>
+                        <span className="payload-flag on-disk" title="Stored on disk (non-default: default is in-memory)">on disk</span>
                       ) : (
                         <span className="payload-flag in-memory" title="Kept in memory (default)">in memory</span>
                       )}
                       {hnswExplicitlyDisabled && (
-                        <span className="payload-flag hnsw-off" title="HNSW graph building disabled for this field (non-default)">HNSW off<span className="cfg-changed">&#9888;</span></span>
+                        <span className="payload-flag hnsw-off" title="HNSW graph building disabled (non-default)">HNSW off</span>
                       )}
                       {hnswExplicitlyEnabled && (
-                        <span className="payload-flag hnsw-on" title="HNSW graph building enabled — needs payload_m > 0 (default)">HNSW on</span>
+                        <span className="payload-flag hnsw-on" title="HNSW graph building enabled (default)">HNSW on</span>
                       )}
                     </span>
                     {schema.points != null && (
@@ -299,19 +499,16 @@ function CollectionDetail({
               })}
             </div>
           ) : (
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', padding: '8px 0' }}>No payload indexes defined</p>
+            <p className="config-section-empty">No payload indexes defined.</p>
           )}
-        </div>
+        </ConfigSection>
 
         {strictMode?.enabled && (
-          <div className="config-section">
-            <h3>Strict Mode</h3>
-            <table className="info-table"><tbody>
-              <tr><td>Unindexed Filter (Read)</td><td>{strictMode.unindexed_filtering_retrieve ? 'Allow' : 'Deny'}</td></tr>
-              <tr><td>Unindexed Filter (Write)</td><td>{strictMode.unindexed_filtering_update ? 'Allow' : 'Deny'}</td></tr>
-              <tr><td>Max Payload Indexes</td><td>{strictMode.max_payload_index_count ?? 'N/A'}</td></tr>
-            </tbody></table>
-          </div>
+          <ConfigSection title="Strict mode" icon="&#x25A8;">
+            <ConfigRow label="Unindexed filter (read)" display={strictMode.unindexed_filtering_retrieve ? <span className="val-bool yes">Allow</span> : <span className="val-bool no">Deny</span>} />
+            <ConfigRow label="Unindexed filter (write)" display={strictMode.unindexed_filtering_update ? <span className="val-bool yes">Allow</span> : <span className="val-bool no">Deny</span>} />
+            <ConfigRow label="Max payload indexes" value={strictMode.max_payload_index_count} />
+          </ConfigSection>
         )}
       </div>
     </div>

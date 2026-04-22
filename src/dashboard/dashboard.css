@@ -1082,18 +1082,6 @@ header h1 {
   padding: 12px 0 4px;
 }
 
-/* Optimizer section gets a header row for its action button */
-.config-section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.config-section-header h3 {
-  margin-bottom: 0;
-}
-
 .collection-meta {
   display: flex;
   gap: 8px;
@@ -1207,13 +1195,288 @@ header h1 {
   margin-top: 14px;
 }
 
-.config-section h3 {
-  font-size: 0.72rem;
+.config-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px 10px;
+  transition: border-color var(--dur) var(--ease-out);
+}
+
+.config-section:hover {
+  border-color: var(--border-strong);
+}
+
+.config-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.config-section-header h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--text-primary);
+  text-transform: none;
+}
+
+.config-section-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.config-section-empty {
   color: var(--text-secondary);
-  margin-bottom: 10px;
+  font-size: 0.8rem;
+  padding: 10px 0 4px;
+  line-height: 1.5;
+}
+
+/* Config rows — replaces generic info-table inside config-section.
+   Label left, value right, non-default gets a subtle left stripe +
+   small "default: X" sub-line under the value. */
+.config-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.config-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(90px, auto);
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 0 7px 2px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.config-row:last-child {
+  border-bottom: none;
+}
+
+.config-row.is-custom::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.config-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.config-row-label-text {
+  cursor: help;
+  border-bottom: 1px dotted transparent;
+  transition: border-color var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
+}
+
+.config-row-label[title]:hover .config-row-label-text {
+  border-bottom-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.config-row-hint-dot {
+  display: inline-flex;
+  width: 13px;
+  height: 13px;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  border-radius: 50%;
+  background: var(--overlay-2);
+  color: var(--text-muted);
+  cursor: help;
+  user-select: none;
+}
+
+.config-row-label:hover .config-row-hint-dot {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.config-row-value {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.config-row-value-main {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.config-row-default {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.config-row-tag {
+  font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--overlay-2);
+  color: var(--text-muted);
   font-weight: 600;
+}
+
+.vector-name {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.vector-name.sparse { color: var(--text-secondary); }
+
+/* Value formatters */
+.val-bool {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-family: var(--font-sans);
+}
+
+.val-bool.yes {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.val-bool.no {
+  background: var(--overlay-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.val-muted {
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-style: italic;
+}
+
+.val-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.val-strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.val-storage {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+}
+
+.val-storage.memory {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.val-storage.disk {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--warning);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.val-status {
+  font-weight: 600;
+  font-family: var(--font-sans);
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+}
+
+.val-status.ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--success);
+}
+
+.val-status.indexing {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--warning);
+}
+
+.val-status.error {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
+}
+
+/* Enabled/disabled tag for section action slot (e.g. Quantization) */
+.quant-pill {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+}
+
+.quant-pill.enabled {
+  background: var(--perf-soft);
+  color: var(--perf);
+  border: 1px solid rgba(94, 234, 212, 0.3);
+}
+
+.quant-pill.disabled {
+  background: var(--overlay-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+/* Non-default marker shown inside compact meta-tag pills (shards/replication) */
+.meta-tag-custom {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+  cursor: help;
 }
 
 /* Shard Distribution Matrix */
